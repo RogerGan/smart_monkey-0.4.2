@@ -6,6 +6,9 @@ module UIAutoMonkey
   require 'rexml/document'
   require 'erubis'
   require 'json'
+  require 'uri'  
+  require 'net/http'
+  require "open-uri" 
 
   class MonkeyRunner
     TRACE_TEMPLATE='/Applications/Xcode.app/Contents/Applications/Instruments.app/Contents/PlugIns/AutomationInstrument.xrplugin/Contents/Resources/Automation.tracetemplate'
@@ -43,7 +46,11 @@ module UIAutoMonkey
       ###########
       endtime = Time.now + time_limit_sec
       puts "endtime #{endtime}"
+      # puts "@@@ device: #{device} product_type: #{product_type(device)}  product_version: #{product_version(device)}"
+      # puts "is_simulator: #{is_simulator}"
+
       result_list = []
+      launchTime = Time.now;
       times = 0
       while Time.now < endtime do
         puts "Time.now #{Time.now}"
@@ -62,6 +69,39 @@ module UIAutoMonkey
                                 #1.run_a_case为成功的时候，这时候可以finish掉，设置下一轮的测试时间为总的时间减去－已经运行的时间
         puts "result #{result}"
         puts "time #{start_time}"
+        puts " ^^^ crashFile: #{result[:crashFile]}"    
+        if result[:crash]
+          bmp_read_file = File.open(result[:crashFile],"rb")    
+          data = bmp_read_file.sysread(256 * 1024)
+          # puts data
+        end
+
+        # 上传崩溃信息
+        finishTime = Time.now;
+        puts "@@@ result.crash: #{result[:crash]} launchTime: #{launchTime} finishTime: #{finishTime} "
+        param = {
+          'device' => product_type(device),
+          'iOS' => product_version(device),
+          'isSimulator' => is_simulator ? "YES" : "",
+          #'version' => '', 
+          #'uuid' => '',
+          'launchTime' => launchTime.strftime("%Y-%m-%d %H:%M:%S"),
+          'endTime' => finishTime.strftime("%Y-%m-%d %H:%M:%S"),
+
+          'isCrash' => result[:crash] ? 'YES' : 'NO',
+          'crashLog' => data,
+          'crashLogFileTitle' => result[:crashFileTitle]
+        }
+      
+        #崩溃信息上传URL
+        urlCrashInfo = URI("http://100.84.87.185/MySQL-CRUD-PHP-OOP/crashinfo.php") 
+        response = Net::HTTP.post_form(urlCrashInfo, param)
+        puts response.body
+
+        launchTime = finishTime;
+        # 上传崩溃信息结束
+
+
         finish_running
         result_list << result
       end
@@ -118,7 +158,8 @@ module UIAutoMonkey
         @crashed = true
         new_cr_name = File.basename(diff_cr_list[0]).gsub(/\.ips$/, '.crash')
         new_cr_path = File.join(result_dir, new_cr_name)
-        log "Find new crash report: #{new_cr_path}"        
+        log "Find new crash report: #{new_cr_path}" 
+
         if dsym_base_path != ''
           puts "Symbolicating crash report..."
           symbolicating_crash_report(diff_cr_list[0])
@@ -134,6 +175,10 @@ module UIAutoMonkey
         :times => @times,
         :ok => !@crashed && !@no_run,
         :crash => @crashed,
+         
+          :crashFile => @crashed ? File.join(result_dir, new_cr_name) : "",
+          :crashFileTitle => @crashed ? new_cr_name : "",
+        
         :result_dir => File.basename(result_history_dir(@times)),
         :message => nil
       }
