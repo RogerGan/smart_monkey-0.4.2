@@ -4,11 +4,16 @@ module UIAutoMonkey
   module CommandHelper
     require 'Open3'
 
+    def instruments_deviceinfo(device)
+      `"instruments" -s devices | grep "#{device}"`.strip
+    end
+
     def is_simulator
       deviceinfo = instruments_deviceinfo(device)
-      if deviceinfo.include? "Simulator"
+      if deviceinfo.include? "-"
         true
       else
+        puts "is RealDevice"
         false
       end
     end
@@ -20,11 +25,6 @@ module UIAutoMonkey
         return stdout.read
       end
     end
-
-    # def run_process(cmds)
-    #   puts "Run: #{cmds.inspect}"
-    #   Kernel.system(cmds[0], *cmds[1..-1])
-    # end
 
     def relaunch_app(device,app)
       if is_simulator
@@ -40,6 +40,7 @@ module UIAutoMonkey
       puts "Run: #{cmds.inspect}"
       device = cmds[2]
       app = cmds[-7]
+      count = 0
       Open3.popen3(*cmds) do |stdin, stdout, stderr, thread|
         @tmpline = ""
         stdin.close
@@ -52,7 +53,14 @@ module UIAutoMonkey
             if current_line == after_sleep_line
               puts "WARN: no response in log, trigger re-launch action."
               relaunch_app(device, app)
-              # kill_all('instruments', '9')
+              count = count + 1
+              puts "have relaunch_app #{count}"
+              if count > 3
+                puts "trigger re-launch failed, kill thread"
+                app_hang_monitor_thread.kill
+                instruments_stderr_thread.kill
+                count = 0
+              end
             end
           end
         }

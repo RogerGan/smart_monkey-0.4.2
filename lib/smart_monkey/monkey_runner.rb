@@ -48,6 +48,10 @@ module UIAutoMonkey
       while Time.now < endtime do
         puts "Time.now #{Time.now}"
         puts "endtime #{endtime}"
+        remaintime = endtime - Time.now
+        @options[:time_limit_sec] = remaintime
+        puts "options time_limit_sec #{@options[:time_limit_sec]}"        
+        puts "time_limit_sec #{time_limit_sec}"
         # some code
         start_time = Time.new.strftime("%Y-%m-%d %H:%M:%S")
         # total_test_count.times do |times|
@@ -60,9 +64,9 @@ module UIAutoMonkey
         puts "time #{start_time}"
         finish_running
         result_list << result
-        # end
       end
       puts "monkey end"
+      puts "result_list #{result_list}"
         create_index_html({
             :start_time => start_time,
             :end_time => Time.new.strftime("%Y-%m-%d %H:%M:%S"),
@@ -96,7 +100,7 @@ module UIAutoMonkey
       watch_syslog do
         begin
           unless time_limit_sec.nil?
-            run_process(%W(instruments -w #{device} -l #{time_limit} -t #{TRACE_TEMPLATE} #{app_path} -e UIASCRIPT #{ui_custom_path} -e UIARESULTSPATH #{result_base_dir}))
+            run_process(%W(instruments -w #{device} -l #{time_limit_sec*1000} -t #{TRACE_TEMPLATE} #{app_path} -e UIASCRIPT #{ui_custom_path} -e UIARESULTSPATH #{result_base_dir}))
           else
             run_process(%W(instruments -w #{device} -t #{TRACE_TEMPLATE} #{app_path} -e UIASCRIPT #{ui_custom_path} -e UIARESULTSPATH #{result_base_dir}))
           end
@@ -145,7 +149,7 @@ module UIAutoMonkey
       end
       rotate_imgs(result_history_dir(@times))
       rm_instruments_trace(INSTRUMENTS_TRACE_PATH)
-      kill_all('iPhone Simulator')
+      kill_all('Simulator')
       sleep 3
     end
 
@@ -200,7 +204,7 @@ module UIAutoMonkey
     end
 
     def reset_iphone_simulator
-      `killall -9 "iOS Simulator"`
+      `killall -9 "Simulator"`
       # FileUtils.rm_rf("#{Dir.home}/Library/Application\ Support/iPhone\ Simulator/")
       # puts 'reset iPhone Simulator successful'
     end
@@ -250,9 +254,11 @@ module UIAutoMonkey
 
     def is_simulator
       deviceinfo = instruments_deviceinfo(device)
-      if deviceinfo.include? "Simulator"
+      if deviceinfo.include? "-"
+        puts "is Simulator"
         true
       else
+        puts "is RealDevice"
         false
       end
     end
